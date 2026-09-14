@@ -1,0 +1,18 @@
+{
+  "name": "gestor-dinero",
+  "private": true,
+  "version": "1.0.0",
+  "description": "App de gestión de ingresos y gastos multicuenta",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently -n backend,frontend -c green,cyan \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "db:migrate": "npm run db:migrate --prefix backend",
+    "db:studio": "npm run db:studio --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
