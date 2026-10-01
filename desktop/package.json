@@ -1,0 +1,79 @@
+{
+  "name": "gestor-dinero",
+  "productName": "Gestor de Dinero",
+  "version": "2.0.0",
+  "description": "Gestión de ingresos y gastos multicuenta",
+  "author": "Chengpms <marquetecheve@gmail.com>",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "node copy-app.cjs && node run.cjs",
+    "dev": "node run.cjs",
+    "dist:linux": "node copy-app.cjs && electron-builder --linux --publish never",
+    "dist:win": "node copy-app.cjs && electron-builder --win --publish never",
+    "dist": "node copy-app.cjs && electron-builder --linux --win --publish never"
+  },
+  "build": {
+    "appId": "com.chengpms.gestordinero",
+    "productName": "Gestor de Dinero",
+    "artifactName": "Gestor-de-Dinero-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "../release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "app/**/*",
+      "build/icon.png"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "icon": "build/icon.png",
+      "maintainer": "Chengpms <marquetecheve@gmail.com>",
+      "synopsis": "Gestión de ingresos y gastos",
+      "executableName": "gestor-dinero"
+    },
+    "deb": {
+      "artifactName": "Gestor-de-Dinero-${version}-${arch}.deb"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Gestor de Dinero",
+      "artifactName": "Gestor-de-Dinero-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Gestor-de-Dinero-${version}-Portable.${ext}"
+    },
+    "afterPack": "./after-pack.cjs"
+  },
+  "devDependencies": {
+    "electron": "^38.8.6",
+    "electron-builder": "^25.1.8"
+  },
+  "homepage": "https://github.com/Chengpms/Cash_manager"
+}

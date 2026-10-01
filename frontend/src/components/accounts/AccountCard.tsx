@@ -41,7 +41,7 @@ export function AccountCard({ account, compact, onEdit, onDelete }: AccountCardP
           <Icon size={20} />
         </div>
         {(onEdit || onDelete) && (
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover-reveal transition-opacity">
             {onEdit && (
               <button
                 onClick={onEdit}

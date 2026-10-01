@@ -1,10 +1,22 @@
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
 export function formatCurrency(amount: number, currency = "EUR"): string {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  let fmt = currencyFormatters.get(currency);
+  if (!fmt) {
+    try {
+      fmt = new Intl.NumberFormat("es-ES", {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    } catch {
+      // Divisa desconocida: mejor mostrar el número que romper la pantalla
+      return formatCurrency(amount, "EUR");
+    }
+    currencyFormatters.set(currency, fmt);
+  }
+  return fmt.format(Number.isFinite(amount) ? amount : 0);
 }
 
 export function formatCompactNumber(amount: number): string {
@@ -41,4 +53,30 @@ export function monthLabel(monthKey: string): string {
   const [year, month] = monthKey.split("-").map(Number);
   const d = new Date(year, month - 1, 1);
   return new Intl.DateTimeFormat("es-ES", { month: "short" }).format(d).replace(".", "");
+}
+
+// Valor para <input type="date">. Las fechas de los movimientos se guardan como
+// medianoche UTC del día elegido, así que se leen en UTC; la fecha por defecto
+// es "hoy" según el reloj local (si no, cerca de medianoche saldría el día anterior).
+export function toInputDate(value?: string): string {
+  if (value) return new Date(value).toISOString().slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+// Fecha de un movimiento (medianoche UTC del día elegido) -> "13 sept 2026"
+export function formatDay(date: string): string {
+  return new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(
+    new Date(date)
+  );
+}
+
+// "hoy", "ayer", "hace 3 días"... comparando días del calendario
+export function formatRelativeDay(date: string): string {
+  const day = date.slice(0, 10);
+  const diff = Math.round((Date.parse(toInputDate()) - Date.parse(day)) / 86_400_000);
+  if (diff === 0) return "hoy";
+  if (diff === 1) return "ayer";
+  if (diff > 1 && diff < 7) return `hace ${diff} días`;
+  return formatDay(date);
 }

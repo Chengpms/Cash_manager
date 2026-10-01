@@ -1,35 +1,44 @@
 import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../api/client";
 import type { Account, Category, Transaction, TransactionFilters, Transfer } from "../types";
+
+// Los datos son locales y las consultas instantáneas, así que tras cualquier
+// cambio se refresca todo: es más simple y evita pantallas desactualizadas
+// (p. ej. renombrar una categoría también cambia la lista de movimientos).
+function invalidateAll(qc: QueryClient) {
+  qc.invalidateQueries();
+  scheduleGooglePush(qc);
+}
+
+function useDataMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => invalidateAll(qc) });
+}
 
 // ---------- Cuentas ----------
 export function useAccounts() {
   return useQuery({ queryKey: ["accounts"], queryFn: api.getAccounts });
 }
 
+export function useArchivedAccounts() {
+  return useQuery({ queryKey: ["accounts", "archived"], queryFn: api.getArchivedAccounts });
+}
+
 export function useCreateAccount() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Partial<Account>) => api.createAccount(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
-  });
+  return useDataMutation((data: Partial<Account>) => api.createAccount(data));
 }
 
 export function useUpdateAccount() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Account> }) => api.updateAccount(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
-  });
+  return useDataMutation(({ id, data }: { id: string; data: Partial<Account> }) => api.updateAccount(id, data));
 }
 
 export function useDeleteAccount() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.deleteAccount(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
-  });
+  return useDataMutation((id: string) => api.deleteAccount(id));
+}
+
+export function useRestoreAccount() {
+  return useDataMutation((id: string) => api.restoreAccount(id));
 }
 
 // ---------- Categorías ----------
@@ -38,64 +47,34 @@ export function useCategories(type?: string) {
 }
 
 export function useCreateCategory() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Partial<Category>) => api.createCategory(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
-  });
+  return useDataMutation((data: Partial<Category>) => api.createCategory(data));
 }
 
 export function useUpdateCategory() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Category> }) => api.updateCategory(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
-  });
+  return useDataMutation(({ id, data }: { id: string; data: Partial<Category> }) => api.updateCategory(id, data));
 }
 
 export function useDeleteCategory() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.deleteCategory(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
-  });
+  return useDataMutation((id: string) => api.deleteCategory(id));
 }
 
 // ---------- Transacciones ----------
-function invalidateMoneyRelated(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ["transactions"] });
-  qc.invalidateQueries({ queryKey: ["accounts"] });
-  qc.invalidateQueries({ queryKey: ["summary"] });
-  qc.invalidateQueries({ queryKey: ["trend"] });
-  qc.invalidateQueries({ queryKey: ["by-category"] });
-}
-
 export function useTransactions(filters: TransactionFilters = {}) {
   return useQuery({ queryKey: ["transactions", filters], queryFn: () => api.getTransactions(filters) });
 }
 
 export function useCreateTransaction() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Partial<Transaction>) => api.createTransaction(data),
-    onSuccess: () => invalidateMoneyRelated(qc),
-  });
+  return useDataMutation((data: Partial<Transaction>) => api.createTransaction(data));
 }
 
 export function useUpdateTransaction() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Transaction> }) => api.updateTransaction(id, data),
-    onSuccess: () => invalidateMoneyRelated(qc),
-  });
+  return useDataMutation(({ id, data }: { id: string; data: Partial<Transaction> }) =>
+    api.updateTransaction(id, data)
+  );
 }
 
 export function useDeleteTransaction() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.deleteTransaction(id),
-    onSuccess: () => invalidateMoneyRelated(qc),
-  });
+  return useDataMutation((id: string) => api.deleteTransaction(id));
 }
 
 // ---------- Transferencias ----------
@@ -104,27 +83,15 @@ export function useTransfers(limit?: number) {
 }
 
 export function useCreateTransfer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Partial<Transfer>) => api.createTransfer(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["transfers"] });
-      qc.invalidateQueries({ queryKey: ["accounts"] });
-      qc.invalidateQueries({ queryKey: ["summary"] });
-    },
-  });
+  return useDataMutation((data: Partial<Transfer>) => api.createTransfer(data));
+}
+
+export function useUpdateTransfer() {
+  return useDataMutation(({ id, data }: { id: string; data: Partial<Transfer> }) => api.updateTransfer(id, data));
 }
 
 export function useDeleteTransfer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.deleteTransfer(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["transfers"] });
-      qc.invalidateQueries({ queryKey: ["accounts"] });
-      qc.invalidateQueries({ queryKey: ["summary"] });
-    },
-  });
+  return useDataMutation((id: string) => api.deleteTransfer(id));
 }
 
 // ---------- Estadísticas ----------
@@ -140,46 +107,71 @@ export function useByCategory(type: string, from?: string, to?: string) {
   return useQuery({ queryKey: ["by-category", type, from, to], queryFn: () => api.getByCategory(type, from, to) });
 }
 
+export function useBudgets() {
+  return useQuery({ queryKey: ["budgets"], queryFn: api.getBudgets });
+}
+
 // ---------- Google Drive / Sheets ----------
 export function useGoogleStatus() {
-  return useQuery({ queryKey: ["google-status"], queryFn: api.getGoogleStatus, staleTime: 10_000 });
+  return useQuery({ queryKey: ["google-status"], queryFn: api.getGoogleStatus, enabled: api.googleAvailable });
+}
+
+export function useConnectGoogle() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.connectGoogle, onSuccess: () => qc.invalidateQueries() });
 }
 
 export function useSyncGoogle() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: api.syncGoogle,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["google-status"] }),
-  });
+  return useMutation({ mutationFn: api.syncGoogle, onSuccess: () => qc.invalidateQueries() });
 }
 
-function invalidateEverythingAfterImport(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ["accounts"] });
-  qc.invalidateQueries({ queryKey: ["categories"] });
-  qc.invalidateQueries({ queryKey: ["transactions"] });
-  qc.invalidateQueries({ queryKey: ["transfers"] });
-  qc.invalidateQueries({ queryKey: ["summary"] });
-  qc.invalidateQueries({ queryKey: ["trend"] });
-  qc.invalidateQueries({ queryKey: ["by-category"] });
-  qc.invalidateQueries({ queryKey: ["google-status"] });
-}
-
-// Importa (una vez) los cambios hechos a mano en la hoja de cálculo. Con
+// Importa los cambios hechos a mano en la hoja de cálculo. Con
 // allowDeletes:true también borra en la app lo que se haya borrado en la hoja.
 export function useImportGoogle() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (opts: { allowDeletes?: boolean } = {}) => api.importGoogle(opts),
-    onSuccess: () => invalidateEverythingAfterImport(qc),
+    onSuccess: () => qc.invalidateQueries(),
   });
 }
 
-// Revisa la hoja de cálculo en segundo plano mientras la app está abierta y
-// conectada a Google, para que los cambios hechos directamente en el Sheet
-// aparezcan en la app sin tener que pulsar nada. Nunca borra datos por su
-// cuenta (allowDeletes: false) — para aplicar filas borradas en la hoja hay
-// que usar el botón "Importar cambios" de Ajustes.
-const AUTO_IMPORT_INTERVAL_MS = 45_000;
+export function useDisconnectGoogle() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.disconnectGoogle, onSuccess: () => qc.invalidateQueries() });
+}
+
+// Sincronización en segundo plano mientras la app está abierta y conectada:
+// cada ~45 s sube los cambios locales pendientes o, si no hay, trae los
+// cambios hechos en la hoja (sin borrar nada). Además, unos segundos después
+// de cada cambio local se sube automáticamente.
+const AUTO_SYNC_INTERVAL_MS = 45_000;
+const PUSH_DELAY_MS = 4_000;
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let ticking = false;
+
+async function runTick(qc: QueryClient) {
+  if (ticking || !api.googleAvailable) return;
+  ticking = true;
+  try {
+    const result = await api.googleAutoSyncTick();
+    if (result !== "skipped") qc.invalidateQueries();
+  } catch {
+    // Silencioso: sin conexión, token caducado... se reintenta en el siguiente ciclo
+    qc.invalidateQueries({ queryKey: ["google-status"] });
+  } finally {
+    ticking = false;
+  }
+}
+
+function scheduleGooglePush(qc: QueryClient) {
+  if (!api.googleAvailable) return;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    runTick(qc);
+  }, PUSH_DELAY_MS);
+}
 
 export function useGoogleAutoSync() {
   const { data: status } = useGoogleStatus();
@@ -188,33 +180,7 @@ export function useGoogleAutoSync() {
 
   useEffect(() => {
     if (!connected) return;
-
-    let cancelled = false;
-    const tick = () => {
-      api
-        .importGoogle({ allowDeletes: false })
-        .then(() => {
-          if (!cancelled) invalidateEverythingAfterImport(qc);
-        })
-        .catch(() => {
-          // Sincronización silenciosa: si falla (sin conexión, token caducado, etc.)
-          // simplemente se reintenta en el siguiente ciclo.
-        });
-    };
-
-    const interval = setInterval(tick, AUTO_IMPORT_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected]);
-}
-
-export function useDisconnectGoogle() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: api.disconnectGoogle,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["google-status"] }),
-  });
+    const interval = setInterval(() => runTick(qc), AUTO_SYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [connected, qc]);
 }

@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { Plus, X } from "lucide-react";
 import { FormField, inputClasses } from "../ui/FormField";
 import { Button } from "../ui/Button";
+import { toInputDate } from "../../utils/format";
 import { IconColorPicker } from "../ui/IconColorPicker";
 import {
   useAccounts,
@@ -20,11 +21,6 @@ interface TransactionFormProps {
   onClose: () => void;
 }
 
-function toInputDate(value?: string) {
-  const d = value ? new Date(value) : new Date();
-  return d.toISOString().slice(0, 10);
-}
-
 export function TransactionForm({ transaction, defaultType = "expense", onClose }: TransactionFormProps) {
   const [type, setType] = useState<MovementType>(transaction?.type || defaultType);
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
@@ -40,7 +36,12 @@ export function TransactionForm({ transaction, defaultType = "expense", onClose 
   const [newCategoryColor, setNewCategoryColor] = useState(COLOR_OPTIONS[0]);
   const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
-  const { data: accounts = [] } = useAccounts();
+  const { data: activeAccounts = [] } = useAccounts();
+  // Al editar un movimiento de una cuenta archivada, esa cuenta sigue apareciendo
+  const accounts =
+    transaction?.account && !activeAccounts.some((a) => a.id === transaction.accountId)
+      ? [...activeAccounts, transaction.account]
+      : activeAccounts;
   const { data: categories = [] } = useCategories(type);
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
@@ -80,9 +81,13 @@ export function TransactionForm({ transaction, defaultType = "expense", onClose 
     e.preventDefault();
     setError(null);
 
-    const amountNum = parseFloat(amount);
+    const amountNum = parseFloat(amount.replace(",", "."));
     if (!amountNum || amountNum <= 0) {
       setError("Introduce un importe válido");
+      return;
+    }
+    if (!date || isNaN(new Date(date).getTime())) {
+      setError("Introduce una fecha válida");
       return;
     }
     if (!accountId) {

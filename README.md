@@ -1,131 +1,111 @@
 # Gestor de Dinero
 
-App para gestionar ingresos y gastos con soporte multicuenta, categorías personalizables, transferencias entre cuentas y un dashboard visual e interactivo.
+App para gestionar ingresos y gastos con soporte multicuenta, categorías personalizables con presupuesto mensual, transferencias entre cuentas y un dashboard visual e interactivo.
+
+Funciona como **app nativa en Linux, Windows y Android**, sin servidor ni instalación de Node.js: tus datos se guardan en el propio dispositivo.
+
+| Plataforma | Archivo | Notas |
+|---|---|---|
+| Linux | `Gestor-de-Dinero-X.Y.Z-linux-x86_64.AppImage` | Un solo archivo: dale permiso de ejecución y ábrelo |
+| Linux (Debian/Ubuntu) | `Gestor-de-Dinero-X.Y.Z-amd64.deb` | `sudo apt install ./Gestor-de-Dinero-*.deb` — aparece en el menú de aplicaciones |
+| Windows | `Gestor-de-Dinero-X.Y.Z-Setup.exe` | Instalador con acceso directo en el escritorio |
+| Windows (portable) | `Gestor-de-Dinero-X.Y.Z-Portable.exe` | Sin instalar, ideal para un USB |
+| Android | `Gestor-de-Dinero-X.Y.Z.apk` | Android 5.1 o superior. Activa "Instalar apps desconocidas" para el navegador o gestor de archivos con el que lo abras |
+
+Los instaladores se generan automáticamente con GitHub Actions: cada push a `main` los deja en la pestaña **Actions** (sección *Artifacts*), y al subir una etiqueta (`git tag v2.0.0 && git push --tags`) se publican en una **Release**.
+
+## Funciones
+
+- **Cuentas** (corriente, ahorros, efectivo, tarjeta, inversión) con balance calculado al momento. Eliminar una cuenta con movimientos la **archiva**; las archivadas se pueden ver y **restaurar**.
+- **Movimientos** de ingreso/gasto con categoría, descripción y fecha. Filtros por cuenta, categoría, tipo, texto y **rango de fechas**, con totales (ingresos, gastos y neto) del resultado filtrado y **exportación a CSV** (abre bien en Excel/LibreOffice en español).
+- **Categorías** con icono, color y **presupuesto mensual** opcional. El resumen muestra el progreso de cada presupuesto y avisa al pasarte.
+- **Transferencias** entre tus cuentas (crear, **editar** y borrar) que no cuentan como ingreso/gasto.
+- **Resumen**: balance total, ingresos/gastos del mes **comparados con el mes anterior**, tendencia de 6 meses y gasto por categoría.
+- **Copias de seguridad**: exporta/restaura todos tus datos en un archivo JSON. Sirve también para pasar los datos del ordenador al móvil y al revés.
+- **Google Sheets** (versión de escritorio): sincronización en los dos sentidos con una hoja de cálculo de tu Drive. Ver [`GOOGLE_SETUP.md`](./GOOGLE_SETUP.md).
+
+## Dónde se guardan los datos
+
+- **Linux**: `~/.config/Gestor de Dinero/gestor-data.json`
+- **Windows**: `%APPDATA%\Gestor de Dinero\gestor-data.json`
+- **Android**: dentro del almacenamiento privado de la app. Desinstalar la app los borra: exporta una copia antes.
+
+La ruta exacta aparece en **Ajustes → Tus datos**. En escritorio, cada guardado es atómico (nunca queda un archivo a medias), se conserva la versión anterior como `gestor-data.json.bak` y se guarda una copia diaria en la subcarpeta `copias/` (últimos 14 días). Si el archivo se dañase, la app se recupera sola desde la copia.
+
+**Modo portable (USB)**: crea una carpeta llamada `gestor-data` junto al `.exe` portable o al `.AppImage` y la app guardará ahí los datos en vez de en la carpeta del usuario, así viajan con el USB.
+
+## ¿Vienes de la versión anterior (con backend)?
+
+La versión 1 guardaba los datos en `backend/prisma/dev.db`. Para pasarlos a la nueva:
+
+```bash
+python3 scripts/migrar-datos-antiguos.py
+```
+
+Genera `gestor-dinero-migrado.json`; ábrelo desde la app en **Ajustes → Restaurar copia** (en el ordenador, o pásalo al móvil y restáuralo allí). Las credenciales de Google ya no se leen de `backend/.env`: introdúcelas en **Ajustes → Google Drive → Credenciales**.
 
 ## Arquitectura
 
-Monorepo con dos paquetes independientes:
-
 ```
 gestor/
-├── backend/     API REST — Node.js + Express + TypeScript + Prisma + SQLite
-└── frontend/    App web — React + Vite + TypeScript + Tailwind CSS + Recharts
+├── frontend/              App (React + Vite + TypeScript + Tailwind + Recharts)
+│   ├── src/data/          Base de datos local y lógica de negocio
+│   │   ├── db.ts          Esquema, validación, guardado transaccional
+│   │   ├── storage.ts     Persistencia: archivo (escritorio) o IndexedDB (Android/web)
+│   │   ├── service.ts     Cuentas, categorías, movimientos, transferencias, estadísticas
+│   │   ├── google.ts      Sincronización con Google Sheets
+│   │   └── backup.ts      Copias JSON y exportación CSV
+│   └── android/           Proyecto Android (Capacitor)
+├── desktop/               Envoltorio de escritorio (Electron + electron-builder)
+│   ├── main.cjs           Archivo de datos, OAuth de Google, diálogos
+│   └── preload.cjs        Puente seguro entre la app y el sistema
+└── scripts/               Iconos y migración de datos antiguos
 ```
 
-**Backend** (`backend/`)
+Toda la lógica vive en la app (`frontend/src/data`), así que las tres plataformas comparten exactamente el mismo código. Cada cambio se aplica sobre una copia y solo se confirma si se guarda bien en disco, y todos los datos que entran (al arrancar o al restaurar una copia) se validan: filas inválidas o huérfanas se descartan en lugar de romper la app.
 
-- `prisma/schema.prisma` — modelos de datos: `Account`, `Category`, `Transaction`, `Transfer`, `GoogleAccount`
-- `src/routes/` — endpoints REST (`/api/accounts`, `/api/categories`, `/api/transactions`, `/api/transfers`, `/api/stats`, `/api/google`)
-- `src/utils.ts` — cálculo de balances (balance inicial + ingresos − gastos + transferencias)
-- `src/google.ts` — OAuth con Google y sincronización con Google Sheets
-- Base de datos SQLite local (`backend/prisma/dev.db`), sin necesidad de servidor externo
+## Desarrollo
 
-**Frontend** (`frontend/`)
-
-- `src/pages/` — Resumen (Dashboard), Cuentas, Transacciones, Categorías, Transferencias, Ajustes
-- `src/components/dashboard/` — `BalanceCard`, `TrendChart` (tendencia mensual), `CategoryDonut` (gasto por categoría)
-- `src/components/ui/` — sistema de diseño reutilizable: `Card`, `Button`, `Modal`, `FormField`, `IconColorPicker`, `EmptyState`
-- `src/hooks/queries.ts` — capa de datos con TanStack Query (caché, invalidación automática)
-- Estilo minimalista cálido (crema + naranja/terracota) inspirado en dashboards financieros modernos, con tarjetas redondeadas, gráficos suaves y micro-interacciones
-
-## Sincronización con Google Drive (Sheets)
-
-Desde la pestaña **Ajustes** puedes conectar tu cuenta de Google. La sincronización funciona en los dos sentidos:
-
-- **App → Sheets**: pulsando "Sincronizar ahora" subes tus cuentas, categorías, transacciones y transferencias a una hoja de cálculo "Gestor de Dinero" en tu Google Drive.
-- **Sheets → App**: si editas una fila o añades una nueva directamente en la hoja, la app la revisa automáticamente cada ~45 segundos (mientras la tienes abierta) y trae esos cambios sola, sin que tengas que hacer nada. Si además borraste filas en la hoja, usa el botón "Importar cambios" para aplicar también esos borrados en la app (por seguridad, la revisión automática en segundo plano nunca borra datos por su cuenta).
-
-Cada fila lleva una columna **ID** que la app usa para reconocerla al volver a importar — no la borres ni la edites. Requiere unas credenciales gratuitas de Google Cloud que se crean en 5 minutos — sigue la guía paso a paso en **[`GOOGLE_SETUP.md`](./GOOGLE_SETUP.md)**.
-
-## Puesta en marcha
-
-Requisitos: Node.js 18+ y npm.
-
-### Opción rápida
-
-- **Linux / macOS**:
-  ```bash
-  chmod +x start.sh   # solo la primera vez
-  ./start.sh
-  ```
-- **Windows**: haz doble clic en `start.bat` (o ejecútalo desde el símbolo del sistema / PowerShell).
-
-Estos scripts crean `backend/.env`, instalan dependencias, crean la base de datos si no existe y arrancan backend + frontend. Es seguro volver a ejecutarlos: si algo ya está instalado o migrado, se lo saltan.
-
-### Opción manual
+Requisitos: Node.js 18+ (20 recomendado).
 
 ```bash
-# 0. Crear el archivo de variables de entorno del backend (solo la primera vez)
-cp backend/.env.example backend/.env
-
-# 1. Instalar dependencias de ambos paquetes
-npm run install:all
-
-# 2. Crear la base de datos (genera backend/prisma/dev.db)
-npm run db:migrate
-# te pedirá un nombre para la migración, por ejemplo: init
-
-# 3. Arrancar backend (puerto 4000) y frontend (puerto 5173) a la vez
-npm run dev
+npm run install:all     # instala dependencias de frontend y desktop
+npm run dev             # app en el navegador: http://localhost:5173 (datos en IndexedDB)
+npm run desktop         # compila y abre la app de escritorio
 ```
 
-Abre http://localhost:5173 — el frontend habla con la API a través de un proxy de Vite (`/api` → `http://localhost:4000`), así que no hace falta configurar CORS ni variables de entorno adicionales.
+O simplemente `./start.sh` (Linux) / `start.bat` (Windows), que instalan lo necesario y abren la app de escritorio.
 
-### Comandos útiles
-
-| Comando             | Qué hace                                                        |
-| ------------------- | --------------------------------------------------------------- |
-| `npm run dev`       | Backend + frontend en paralelo (desarrollo)                     |
-| `npm run build`     | Compila ambos paquetes para producción                          |
-| `npm run db:studio` | Abre Prisma Studio para ver/editar la base de datos visualmente |
-
-## 📦 Llevarlo en un USB y ejecutarlo en Windows, macOS o Linux
-
-Esta carpeta no necesita "instalarse" en el sistema — es un proyecto normal, así que puedes copiarla entera a una memoria USB y arrancarla desde cualquier ordenador con Node.js, sea Windows, macOS o Linux.
-
-**1. Prepara la carpeta antes de copiarla (una sola vez, desde el ordenador donde la tienes ahora):**
+### Generar los instaladores
 
 ```bash
-chmod +x preparar-usb.sh   # solo la primera vez
-./preparar-usb.sh
+npm run dist:linux      # release/*.AppImage y *.deb
+npm run dist:win        # release/*.exe (en Linux requiere Wine; mejor en Windows o en GitHub Actions)
+npm run android:apk     # frontend/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Esto borra `node_modules` y las carpetas compiladas (`dist`), que pesan mucho y además contienen piezas nativas específicas de tu sistema operativo actual — si las copiaras tal cual a un Windows o un Mac no funcionarían allí. Se vuelven a generar solas la primera vez que arrancas la app en cada ordenador nuevo (por eso ese primer arranque tarda un poco más y necesita internet).
+Para el APK hace falta JDK 17 y el Android SDK (variable `ANDROID_HOME`), o abrir `frontend/android` con Android Studio.
 
-Después, copia toda la carpeta `gestor` (o como la hayas renombrado) a tu memoria USB.
+### Firma del APK
 
-**2. Ejecutarlo en cualquier ordenador donde tengas el USB:**
+Android solo permite actualizar una app si la nueva versión está firmada con **la misma clave**. La clave de release está en `frontend/android/gestor-release.jks` con sus contraseñas en `frontend/android/keystore.properties` — ninguno de los dos se sube a git. **Guárdalos en un sitio seguro**: si los pierdes, para instalar una versión nueva habría que desinstalar la app (y se borrarían los datos del móvil, salvo que antes exportes una copia).
 
-Necesitas tener [Node.js](https://nodejs.org) (versión 18 o superior) instalado en ese ordenador — es gratis y se instala en un minuto. Con eso:
+Para que GitHub Actions firme con esa misma clave, añade estos *secrets* en el repositorio (Settings → Secrets and variables → Actions):
 
-- **Linux / macOS**: abre una terminal en la carpeta (dentro del USB) y ejecuta `chmod +x start.sh && ./start.sh`.
-- **Windows**: haz doble clic en `start.bat` dentro de la carpeta. Si Windows avisa de que es un archivo de un "editor desconocido", pulsa "Más información" → "Ejecutar de todas formas".
+| Secret | Valor |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | salida de `base64 -w0 frontend/android/gestor-release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` de `keystore.properties` |
+| `ANDROID_KEY_ALIAS` | `gestor` |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` de `keystore.properties` |
 
-En ambos casos la app queda disponible en `http://localhost:5173`. Salvo que uses la sincronización con Google Sheets, funciona completamente sin conexión una vez instalada.
+Sin ellos, el APK de GitHub se firma con una clave temporal (se instala bien, pero no puede actualizar uno firmado con otra clave).
 
-**Qué viaja contigo en el USB:**
+### Iconos
 
-- **Tus datos** (`backend/prisma/dev.db`) son un archivo normal — viajan con la carpeta, así que tus cuentas, categorías y movimientos estarán ahí en cualquier ordenador donde la ejecutes.
-- **Tus credenciales de Google** (`backend/.env`, si ya conectaste Google Sheets) también viajan con el proyecto para que la sincronización siga funcionando. Por eso conviene no dejar el USB desatendido ni prestarlo — quien tenga ese archivo podría usar esas credenciales. Si vas a compartir el USB, borra `backend/.env` antes (se recrea siguiendo [`GOOGLE_SETUP.md`](./GOOGLE_SETUP.md)).
-
-## Primeros pasos dentro de la app
-
-La app arranca completamente vacía, como pediste. Orden recomendado:
-
-1. **Cuentas** → crea tus cuentas (banco, efectivo, tarjeta, inversión...)
-2. **Categorías** → crea las categorías de ingreso/gasto que uses habitualmente
-3. **Resumen** → usa "Nueva transacción" para registrar movimientos; el dashboard (balance, tendencia, gasto por categoría) se rellena automáticamente
-4. **Transferencias** → para mover dinero entre tus propias cuentas sin que cuente como ingreso/gasto
-5. **Ajustes** (opcional) → conecta tu cuenta de Google para guardar una copia de tus datos en Google Sheets (ver [`GOOGLE_SETUP.md`](./GOOGLE_SETUP.md))
+`python3 scripts/generate-icons.py` (requiere Pillow) regenera los iconos de escritorio y Android y las pantallas de arranque.
 
 ## Notas
 
 - Los balances de cuenta se calculan dinámicamente (no se almacenan), por lo que siempre están en sincronía con tus movimientos.
-- Eliminar una cuenta con movimientos o transferencias la archiva en vez de borrarla, para no perder el histórico.
-- La paleta de colores y los iconos de cuentas/categorías son personalizables al crearlas o editarlas.
-- Este proyecto se generó y verificó por lectura de código en un entorno en la nube sin acceso al registro de npm, por lo que `npm install` no se pudo ejecutar aquí. Si al instalar ves algún error, pégamelo y lo resolvemos.
-- `start.bat` (Windows) se escribió y revisó a mano igual que el resto del proyecto, pero no se pudo probar en un Windows real desde aquí — si al ejecutarlo ves algún error, copia el mensaje y lo arreglamos.
-
-## Copyright
-
-Copyright © 2026 Cheng Marquet. All rights reserved.
+- En Ubuntu 24.04+ el AppImage arranca sin el sandbox de Chromium, porque el sistema bloquea los *user namespaces* que necesita. El paquete `.deb` sí lo mantiene. La app solo carga su propio contenido local.

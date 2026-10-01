@@ -1,18 +1,17 @@
 {
-  "name": "gestor-dinero",
+  "name": "gestor-dinero-monorepo",
   "private": true,
-  "version": "1.0.0",
-  "description": "App de gestión de ingresos y gastos multicuenta",
+  "version": "2.0.0",
+  "description": "App de gestión de ingresos y gastos multicuenta (escritorio Linux/Windows y Android)",
   "scripts": {
-    "install:all": "npm install --prefix backend && npm install --prefix frontend",
-    "dev:backend": "npm run dev --prefix backend",
-    "dev:frontend": "npm run dev --prefix frontend",
-    "dev": "concurrently -n backend,frontend -c green,cyan \"npm:dev:backend\" \"npm:dev:frontend\"",
-    "build": "npm run build --prefix backend && npm run build --prefix frontend",
-    "db:migrate": "npm run db:migrate --prefix backend",
-    "db:studio": "npm run db:studio --prefix backend"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.0"
+    "install:all": "npm install --prefix frontend && npm install --prefix desktop",
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "desktop": "npm run build --prefix frontend && npm start --prefix desktop",
+    "dist:linux": "npm run build --prefix frontend && npm run dist:linux --prefix desktop",
+    "dist:win": "npm run build --prefix frontend && npm run dist:win --prefix desktop",
+    "android:apk": "npm run android:apk --prefix frontend",
+    "icons": "python3 scripts/generate-icons.py",
+    "migrar": "python3 scripts/migrar-datos-antiguos.py"
   }
 }

@@ -8,6 +8,7 @@ import { BalanceCard } from "../components/dashboard/BalanceCard";
 import { StatMini } from "../components/dashboard/StatMini";
 import { TrendChart } from "../components/dashboard/TrendChart";
 import { CategoryDonut } from "../components/dashboard/CategoryDonut";
+import { BudgetsCard } from "../components/dashboard/BudgetsCard";
 import { TransactionList } from "../components/transactions/TransactionList";
 import { AccountCard } from "../components/accounts/AccountCard";
 import { Modal } from "../components/ui/Modal";
@@ -44,8 +45,8 @@ export function Dashboard() {
             accountsCount={summary?.accountsCount ?? 0}
           />
           <div className="flex flex-col sm:flex-row lg:flex-col gap-4">
-            <StatMini label="Ingresos del mes" amount={summary?.monthIncome ?? 0} icon={TrendingUp} tone="positive" />
-            <StatMini label="Gastos del mes" amount={summary?.monthExpense ?? 0} icon={TrendingDown} tone="negative" />
+            <StatMini label="Ingresos del mes" amount={summary?.monthIncome ?? 0} previous={summary?.prevMonthIncome} icon={TrendingUp} tone="positive" />
+            <StatMini label="Gastos del mes" amount={summary?.monthExpense ?? 0} previous={summary?.prevMonthExpense} icon={TrendingDown} tone="negative" />
           </div>
         </div>
 
@@ -82,6 +83,8 @@ export function Dashboard() {
           <CategoryDonut data={byCategory} isLoading={loadingCategory} />
         </Card>
       </div>
+
+      <BudgetsCard />
 
       <div className="mt-5">
         <div className="flex items-center justify-between mb-3">

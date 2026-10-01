@@ -1,33 +1,39 @@
 import { FormEvent, useState } from "react";
 import { FormField, inputClasses } from "../ui/FormField";
 import { Button } from "../ui/Button";
-import { useAccounts, useCreateTransfer } from "../../hooks/queries";
+import { toInputDate } from "../../utils/format";
+import { useAccounts, useCreateTransfer, useUpdateTransfer } from "../../hooks/queries";
+import type { Transfer } from "../../types";
 
 interface TransferFormProps {
+  transfer?: Transfer;
   onClose: () => void;
 }
 
-function toInputDate(value?: string) {
-  const d = value ? new Date(value) : new Date();
-  return d.toISOString().slice(0, 10);
-}
+export function TransferForm({ transfer, onClose }: TransferFormProps) {
+  const { data: activeAccounts = [] } = useAccounts();
+  const [fromAccountId, setFromAccountId] = useState(transfer?.fromAccountId || "");
+  const [toAccountId, setToAccountId] = useState(transfer?.toAccountId || "");
+  const [amount, setAmount] = useState(transfer ? String(transfer.amount) : "");
+  const [description, setDescription] = useState(transfer?.description || "");
+  const [date, setDate] = useState(toInputDate(transfer?.date));
 
-export function TransferForm({ onClose }: TransferFormProps) {
-  const { data: accounts = [] } = useAccounts();
-  const [fromAccountId, setFromAccountId] = useState("");
-  const [toAccountId, setToAccountId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState(toInputDate());
+  // Al editar, las cuentas ya archivadas de la transferencia siguen apareciendo
+  const accounts = [...activeAccounts];
+  for (const a of [transfer?.fromAccount, transfer?.toAccount]) {
+    if (a && !accounts.some((x) => x.id === a.id)) accounts.push(a);
+  }
   const [error, setError] = useState<string | null>(null);
 
   const createMutation = useCreateTransfer();
+  const updateMutation = useUpdateTransfer();
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
 
-    const amountNum = parseFloat(amount);
+    const amountNum = parseFloat(amount.replace(",", "."));
     if (!amountNum || amountNum <= 0) {
       setError("Introduce un importe válido");
       return;
@@ -42,13 +48,19 @@ export function TransferForm({ onClose }: TransferFormProps) {
     }
 
     try {
-      await createMutation.mutateAsync({
+      if (!date || isNaN(new Date(date).getTime())) {
+        setError("Introduce una fecha válida");
+        return;
+      }
+      const payload = {
         amount: amountNum,
         fromAccountId,
         toAccountId,
         description: description || null,
         date: new Date(date).toISOString(),
-      });
+      };
+      if (transfer) await updateMutation.mutateAsync({ id: transfer.id, data: payload });
+      else await createMutation.mutateAsync(payload);
       onClose();
     } catch (err: any) {
       setError(err.message || "No se pudo registrar la transferencia");
@@ -86,6 +98,7 @@ export function TransferForm({ onClose }: TransferFormProps) {
       <FormField label="Importe">
         <input
           type="number"
+          inputMode="decimal"
           step="0.01"
           min="0"
           className={inputClasses}
@@ -115,8 +128,8 @@ export function TransferForm({ onClose }: TransferFormProps) {
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={createMutation.isPending}>
-          {createMutation.isPending ? "Guardando..." : "Transferir"}
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? "Guardando..." : transfer ? "Guardar cambios" : "Transferir"}
         </Button>
       </div>
     </form>

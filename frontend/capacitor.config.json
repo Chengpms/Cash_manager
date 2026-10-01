@@ -1,0 +1,8 @@
+{
+  "appId": "com.chengpms.gestordinero",
+  "appName": "Gestor de Dinero",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#F6F0E4"
+  }
+}

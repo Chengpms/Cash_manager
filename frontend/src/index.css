@@ -27,3 +27,11 @@
     background: transparent;
   }
 }
+
+/* En pantallas táctiles (Android) no existe el "hover": los botones de
+   editar/borrar que aparecen al pasar el ratón se muestran siempre. */
+@media (hover: none) {
+  .hover-reveal {
+    opacity: 1 !important;
+  }
+}
