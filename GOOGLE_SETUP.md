@@ -28,45 +28,38 @@ Para que el botón "Conectar con Google" de la pestaña **Ajustes** funcione, Go
 1. Ve a **APIs y servicios → Credenciales**.
 2. Pulsa **Crear credenciales → ID de cliente de OAuth**.
 3. Tipo de aplicación: **Aplicación web**.
-4. Nombre: `Gestor de Dinero backend` (o el que prefieras).
+4. Nombre: `Gestor de Dinero` (o el que prefieras).
 5. En **"URIs de redirección autorizados"** pulsa **Añadir URI** y escribe exactamente:
    ```
    http://localhost:4000/api/google/callback
    ```
+   (Si ya tenías credenciales de la versión anterior con este URI, sirven tal cual.)
 6. Pulsa **Crear**. Google te mostrará un **Client ID** (termina en `.apps.googleusercontent.com`) y un **Client Secret**. Cópialos — puedes volver a verlos luego en la lista de credenciales.
 
-## 5. Añade las credenciales al proyecto
+## 5. Introduce las credenciales en la app
 
-Abre `backend/.env` (si no existe, créalo copiando `backend/.env.example`) y rellena estas líneas con tus valores:
+La sincronización con Google Sheets está disponible en la **versión de escritorio** (Linux y Windows). En Android usa *Exportar copia / Restaurar copia* para mover datos.
 
-```env
-GOOGLE_CLIENT_ID="tu-client-id.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="tu-client-secret"
-GOOGLE_REDIRECT_URI="http://localhost:4000/api/google/callback"
-FRONTEND_URL="http://localhost:5173"
-```
+1. Abre la app y ve a **Ajustes → Google Drive · Sheets → Credenciales**.
+2. Pega el **Client ID** y el **Client Secret** y pulsa **Guardar credenciales**. Se guardan solo en este ordenador, junto a tus datos.
 
-## 6. Aplica el nuevo modelo de base de datos
+> Si compilas la app tú mismo, también puedes incluirlas de serie creando `frontend/.env.local` con `VITE_GOOGLE_CLIENT_ID=...` y `VITE_GOOGLE_CLIENT_SECRET=...` antes de `npm run build`. No lo hagas en instaladores que vayas a compartir con otras personas.
 
-Esta función añadió una tabla nueva (`GoogleAccount`) al esquema. Si es la primera vez que arrancas el proyecto, `./start.sh` ya se encarga de crearla. Si ya habías ejecutado `npm run db:migrate` antes de esta actualización, aplica la migración nueva manualmente:
+## 6. Conéctate
 
-```bash
-cd backend
-npx prisma migrate dev --name add_google_account
-cd ..
-```
+1. Pulsa **Conectar con Google**. Se abrirá tu navegador con la página de Google (la app espera la respuesta en el puerto 4000 del propio ordenador; si otro programa lo está usando, ciérralo primero).
+2. Verás un aviso de Google que dice algo como *"Google no ha verificado esta app"* — es normal porque la app está en modo Pruebas y es tuya. Pulsa **Avanzado** → **Ir a Gestor de Dinero (no seguro)** para continuar.
+3. Acepta los permisos de Google Sheets. El navegador mostrará "¡Conectado!" y la app quedará conectada.
+4. Pulsa **Sincronizar ahora**. Se creará una hoja de cálculo llamada "Gestor de Dinero" en tu Google Drive con 4 pestañas (Cuentas, Categorías, Transacciones, Transferencias). Puedes abrirla con el botón "Abrir hoja de cálculo".
 
-## 7. Conéctate
+## Cómo se sincroniza
 
-1. Arranca la app (`./start.sh` o `npm run dev`).
-2. Ve a la pestaña **Ajustes** y pulsa **Conectar con Google**.
-3. Verás un aviso de Google que dice algo como *"Google no ha verificado esta app"* — es normal porque la app está en modo Pruebas y es tuya. Pulsa **Avanzado** → **Ir a Gestor de Dinero (no seguro)** para continuar.
-4. Acepta los permisos de Google Sheets. Volverás automáticamente a la app, ya conectado.
-5. Pulsa **Sincronizar ahora**. Se creará una hoja de cálculo llamada "Gestor de Dinero" en tu Google Drive con 4 pestañas (Cuentas, Categorías, Transacciones, Transferencias). Puedes abrirla directamente desde el botón "Abrir hoja de cálculo".
-
-## Notas
-
-- La sincronización es manual: pulsa "Sincronizar ahora" cuando quieras actualizar la hoja con el estado actual de tus datos. No hay sincronización automática en segundo plano.
-- Cada sincronización sobrescribe el contenido de las 4 pestañas — no seas tú quien edite la hoja directamente, porque se perderían esos cambios en la siguiente sincronización.
-- Puedes desconectar tu cuenta en cualquier momento desde Ajustes; esto no borra la hoja de cálculo, solo deja de estar vinculada a la app.
+- Mientras la app está abierta, **tus cambios se suben solos** a los pocos segundos.
+- Cada ~45 segundos la app revisa la hoja y **trae los cambios hechos allí** (filas editadas o nuevas). Esta revisión automática nunca borra nada.
+- Si hay cambios pendientes en la app y en la hoja a la vez, **los de la app tienen prioridad**.
+- Para aplicar en la app las filas que borraste en la hoja, pulsa **Importar cambios**. Solo se borran registros que ya estaban en la hoja (nunca algo que aún no se había subido); las cuentas con movimientos se archivan en vez de borrarse.
+- Si borras la hoja de tu Drive, la siguiente sincronización crea una nueva. Si borras una pestaña, se vuelve a crear.
+- No borres ni edites la columna **ID**: es lo que usa la app para reconocer cada fila. Una fila con el ID vacío se trata como un registro nuevo.
+- La pestaña Categorías incluye la columna **Presupuesto mensual**.
+- Puedes desconectar tu cuenta en cualquier momento desde Ajustes; esto no borra la hoja de cálculo.
 - Todo esto es gratuito: la API de Google Sheets no tiene coste para este nivel de uso y no hace falta activar facturación en el proyecto de Google Cloud.

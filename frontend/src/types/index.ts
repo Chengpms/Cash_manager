@@ -10,6 +10,7 @@ export interface Account {
   icon: string;
   initialBalance: number;
   balance: number;
+  archived: boolean;
   createdAt: string;
 }
 
@@ -19,6 +20,8 @@ export interface Category {
   type: MovementType;
   color: string;
   icon: string;
+  // Presupuesto mensual (solo categorías de gasto)
+  budget: number | null;
 }
 
 export interface Transaction {
@@ -48,7 +51,16 @@ export interface StatsSummary {
   totalBalance: number;
   monthIncome: number;
   monthExpense: number;
+  prevMonthIncome: number;
+  prevMonthExpense: number;
   accountsCount: number;
+}
+
+export interface BudgetStatus {
+  category: Category;
+  budget: number;
+  spent: number;
+  ratio: number;
 }
 
 export interface TrendPoint {
@@ -81,6 +93,7 @@ export type GoogleStatus =
       email: string;
       spreadsheetUrl: string | null;
       lastSyncedAt: string | null;
+      pendingPush: boolean;
     };
 
 export interface GoogleSyncResult {

@@ -1,6 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, Pencil, Trash2, Receipt } from "lucide-react";
 import { getIcon } from "../../utils/constants";
-import { formatCurrency, formatRelativeTime, formatDate } from "../../utils/format";
+import { formatCurrency, formatDay, formatRelativeDay } from "../../utils/format";
 import { EmptyState } from "../ui/EmptyState";
 import type { Transaction } from "../../types";
 
@@ -63,7 +63,7 @@ export function TransactionList({
               </p>
               <p className="text-xs text-ink-soft truncate">
                 {showAccount && t.account ? `${t.account.name} · ` : ""}
-                {relativeDates ? formatRelativeTime(t.date) : formatDate(t.date)}
+                {relativeDates ? formatRelativeDay(t.date) : formatDay(t.date)}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -77,7 +77,7 @@ export function TransactionList({
                 {formatCurrency(t.amount, t.account?.currency)}
               </span>
               {(onEdit || onDelete) && (
-                <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover-reveal transition-opacity">
                   {onEdit && (
                     <button
                       onClick={() => onEdit(t)}

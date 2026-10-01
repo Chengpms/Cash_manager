@@ -1,11 +1,19 @@
 node_modules/
 dist/
 build/
+!desktop/build/
 .env
 *.local
-backend/prisma/dev.db
-backend/prisma/dev.db-journal
-backend/generated/
 .DS_Store
 *.log
 Claude outputs/
+
+# Datos de la versión anterior (backend Express) que puedan quedar en local
+backend/
+
+# Copias / migraciones de datos personales
+gestor-dinero-*.json
+
+# Compilaciones de escritorio
+desktop/app/
+release/

@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 
 export function MobileNav() {
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-cream-soft border-t border-border px-2 py-2 flex justify-between">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-cream-soft border-t border-border px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex justify-between">
       {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}

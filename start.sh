@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Gestor de Dinero — instalación y arranque en un solo paso
+# Gestor de Dinero — instala lo necesario (solo la primera vez) y abre la app de escritorio.
+# Para instalarla de forma permanente es más cómodo usar el AppImage / .deb (ver README).
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,34 +13,15 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-# 1. Variables de entorno del backend
-if [ ! -f backend/.env ]; then
-  cp backend/.env.example backend/.env
-  echo "-> Creado backend/.env"
-fi
-
-# 2. Dependencias (solo si no están instaladas ya)
-if [ ! -d node_modules ]; then
-  echo "-> Instalando dependencias raíz..."
-  npm install
-fi
-
-if [ ! -d backend/node_modules ]; then
-  echo "-> Instalando dependencias del backend..."
-  npm install --prefix backend
-fi
-
 if [ ! -d frontend/node_modules ]; then
-  echo "-> Instalando dependencias del frontend..."
+  echo "-> Instalando dependencias de la app..."
   npm install --prefix frontend
 fi
 
-# 3. Base de datos: crear la migración inicial si aún no existe
-if [ ! -d backend/prisma/migrations ]; then
-  echo "-> Creando la base de datos (primera vez)..."
-  (cd backend && npx prisma migrate dev --name init)
+if [ ! -d desktop/node_modules ]; then
+  echo "-> Instalando Electron (escritorio)..."
+  npm install --prefix desktop
 fi
 
-# 4. Arrancar backend (puerto 4000) y frontend (puerto 5173) a la vez
-echo "-> Arrancando la app en http://localhost:5173 (Ctrl+C para detener)"
-npm run dev
+echo "-> Compilando y abriendo la app..."
+npm run desktop

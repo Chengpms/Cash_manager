@@ -18,6 +18,7 @@ export function CategoryForm({ category, defaultType = "expense", onClose }: Cat
   const [type, setType] = useState<MovementType>(category?.type || defaultType);
   const [icon, setIcon] = useState(category?.icon || "tag");
   const [color, setColor] = useState(category?.color || COLOR_OPTIONS[0]);
+  const [budget, setBudget] = useState(category?.budget ? String(category.budget) : "");
   const [error, setError] = useState<string | null>(null);
 
   const createMutation = useCreateCategory();
@@ -33,7 +34,17 @@ export function CategoryForm({ category, defaultType = "expense", onClose }: Cat
       return;
     }
 
-    const payload = { name: name.trim(), type, icon, color };
+    let budgetNum: number | null = null;
+    if (type === "expense" && budget.trim()) {
+      budgetNum = parseFloat(budget.replace(",", "."));
+      if (!Number.isFinite(budgetNum) || budgetNum < 0) {
+        setError("Introduce un presupuesto válido o déjalo vacío");
+        return;
+      }
+      if (budgetNum === 0) budgetNum = null;
+    }
+
+    const payload = { name: name.trim(), type, icon, color, budget: budgetNum };
 
     try {
       if (category) {
@@ -86,6 +97,21 @@ export function CategoryForm({ category, defaultType = "expense", onClose }: Cat
           autoFocus
         />
       </FormField>
+
+      {type === "expense" && (
+        <FormField label="Presupuesto mensual (opcional)">
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            className={inputClasses}
+            placeholder="Sin límite"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+          />
+        </FormField>
+      )}
 
       <FormField label="Icono y color">
         <IconColorPicker

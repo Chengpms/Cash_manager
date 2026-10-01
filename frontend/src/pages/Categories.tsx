@@ -8,6 +8,7 @@ import { Modal } from "../components/ui/Modal";
 import { CategoryForm } from "../components/forms/CategoryForm";
 import { useCategories, useDeleteCategory } from "../hooks/queries";
 import { getIcon } from "../utils/constants";
+import { formatCurrency } from "../utils/format";
 import type { Category, MovementType } from "../types";
 
 function CategoryGroup({
@@ -42,7 +43,10 @@ function CategoryGroup({
                   <Icon size={16} />
                 </div>
                 <span className="text-sm text-ink flex-1 truncate">{c.name}</span>
-                <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {c.budget ? (
+                  <span className="text-xs text-ink-soft shrink-0">{formatCurrency(c.budget)}/mes</span>
+                ) : null}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover-reveal transition-opacity">
                   <button
                     onClick={() => onEdit(c)}
                     className="p-1.5 rounded-lg text-ink-soft hover:bg-cream-dark"
@@ -86,7 +90,7 @@ export function Categories() {
   }
 
   async function handleDelete(category: Category) {
-    if (!confirm(`¿Eliminar la categoría "${category.name}"?`)) return;
+    if (!confirm(`¿Eliminar la categoría "${category.name}"? Sus movimientos quedarán sin categoría.`)) return;
     await deleteMutation.mutateAsync(category.id);
   }
 

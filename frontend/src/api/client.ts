@@ -1,85 +1,50 @@
-import type {
-  Account,
-  Category,
-  CategoryBreakdown,
-  GoogleImportResult,
-  GoogleStatus,
-  GoogleSyncResult,
-  StatsSummary,
-  Transaction,
-  TransactionFilters,
-  Transfer,
-  TrendPoint,
-} from "../types";
+import * as service from "../data/service";
+import * as google from "../data/google";
 
-const BASE_URL = "/api";
-
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Error ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-function buildQuery(params: Record<string, string | number | undefined>): string {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== "") search.set(key, String(value));
-  });
-  const qs = search.toString();
-  return qs ? `?${qs}` : "";
-}
+// Capa de acceso a datos usada por los hooks de React Query. Antes hacía
+// peticiones HTTP a un backend Express; ahora todo se ejecuta dentro de la app
+// sobre la base de datos local, así que funciona sin servidor en escritorio y
+// en Android.
 
 // Cuentas
-export const getAccounts = () => request<Account[]>("/accounts");
-export const createAccount = (data: Partial<Account>) =>
-  request<Account>("/accounts", { method: "POST", body: JSON.stringify(data) });
-export const updateAccount = (id: string, data: Partial<Account>) =>
-  request<Account>(`/accounts/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const deleteAccount = (id: string) => request<{ deleted?: boolean; archived?: boolean }>(`/accounts/${id}`, { method: "DELETE" });
+export const getAccounts = () => service.getAccounts();
+export const getArchivedAccounts = () => service.getAccounts({ archived: true });
+export const createAccount = service.createAccount;
+export const updateAccount = service.updateAccount;
+export const deleteAccount = service.deleteAccount;
+export const restoreAccount = service.restoreAccount;
 
 // Categorías
-export const getCategories = (type?: string) =>
-  request<Category[]>(`/categories${buildQuery({ type })}`);
-export const createCategory = (data: Partial<Category>) =>
-  request<Category>("/categories", { method: "POST", body: JSON.stringify(data) });
-export const updateCategory = (id: string, data: Partial<Category>) =>
-  request<Category>(`/categories/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const deleteCategory = (id: string) => request<{ deleted: boolean }>(`/categories/${id}`, { method: "DELETE" });
+export const getCategories = service.getCategories;
+export const createCategory = service.createCategory;
+export const updateCategory = service.updateCategory;
+export const deleteCategory = service.deleteCategory;
 
 // Transacciones
-export const getTransactions = (filters: TransactionFilters = {}) =>
-  request<Transaction[]>(`/transactions${buildQuery(filters as Record<string, string | number | undefined>)}`);
-export const createTransaction = (data: Partial<Transaction>) =>
-  request<Transaction>("/transactions", { method: "POST", body: JSON.stringify(data) });
-export const updateTransaction = (id: string, data: Partial<Transaction>) =>
-  request<Transaction>(`/transactions/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const deleteTransaction = (id: string) => request<{ deleted: boolean }>(`/transactions/${id}`, { method: "DELETE" });
+export const getTransactions = service.getTransactions;
+export const createTransaction = service.createTransaction;
+export const updateTransaction = service.updateTransaction;
+export const deleteTransaction = service.deleteTransaction;
 
 // Transferencias
-export const getTransfers = (limit?: number) => request<Transfer[]>(`/transfers${buildQuery({ limit })}`);
-export const createTransfer = (data: Partial<Transfer>) =>
-  request<Transfer>("/transfers", { method: "POST", body: JSON.stringify(data) });
-export const deleteTransfer = (id: string) => request<{ deleted: boolean }>(`/transfers/${id}`, { method: "DELETE" });
+export const getTransfers = service.getTransfers;
+export const createTransfer = service.createTransfer;
+export const updateTransfer = service.updateTransfer;
+export const deleteTransfer = service.deleteTransfer;
 
 // Estadísticas
-export const getSummary = () => request<StatsSummary>("/stats/summary");
-export const getTrend = (months = 6) => request<TrendPoint[]>(`/stats/trend${buildQuery({ months })}`);
-export const getByCategory = (type: string, from?: string, to?: string) =>
-  request<CategoryBreakdown[]>(`/stats/by-category${buildQuery({ type, from, to })}`);
+export const getSummary = service.getSummary;
+export const getTrend = service.getTrend;
+export const getByCategory = service.getByCategory;
+export const getBudgets = service.getBudgets;
 
-// Google Drive / Sheets
-export const getGoogleAuthUrl = () => request<{ url: string }>("/google/auth-url");
-export const getGoogleStatus = () => request<GoogleStatus>("/google/status");
-export const syncGoogle = () => request<GoogleSyncResult>("/google/sync", { method: "POST" });
-export const importGoogle = (opts: { allowDeletes?: boolean } = {}) =>
-  request<GoogleImportResult>("/google/import", {
-    method: "POST",
-    body: JSON.stringify({ allowDeletes: !!opts.allowDeletes }),
-  });
-export const disconnectGoogle = () => request<{ disconnected: boolean }>("/google/disconnect", { method: "POST" });
+// Google Drive / Sheets (solo escritorio)
+export const googleAvailable = google.googleAvailable;
+export const connectGoogle = google.connectGoogle;
+export const getGoogleStatus = google.getGoogleStatus;
+export const syncGoogle = google.syncToSheets;
+export const importGoogle = (opts: { allowDeletes?: boolean } = {}) => google.importFromSheets(!!opts.allowDeletes);
+export const disconnectGoogle = google.disconnectGoogle;
+export const googleAutoSyncTick = google.autoSyncTick;
+export const getGoogleCredentials = google.getGoogleCredentials;
+export const saveGoogleCredentials = google.saveGoogleCredentials;
