@@ -13,6 +13,7 @@ gestor/
 ```
 
 **Backend** (`backend/`)
+
 - `prisma/schema.prisma` — modelos de datos: `Account`, `Category`, `Transaction`, `Transfer`, `GoogleAccount`
 - `src/routes/` — endpoints REST (`/api/accounts`, `/api/categories`, `/api/transactions`, `/api/transfers`, `/api/stats`, `/api/google`)
 - `src/utils.ts` — cálculo de balances (balance inicial + ingresos − gastos + transferencias)
@@ -20,6 +21,7 @@ gestor/
 - Base de datos SQLite local (`backend/prisma/dev.db`), sin necesidad de servidor externo
 
 **Frontend** (`frontend/`)
+
 - `src/pages/` — Resumen (Dashboard), Cuentas, Transacciones, Categorías, Transferencias, Ajustes
 - `src/components/dashboard/` — `BalanceCard`, `TrendChart` (tendencia mensual), `CategoryDonut` (gasto por categoría)
 - `src/components/ui/` — sistema de diseño reutilizable: `Card`, `Button`, `Modal`, `FormField`, `IconColorPicker`, `EmptyState`
@@ -71,10 +73,10 @@ Abre http://localhost:5173 — el frontend habla con la API a través de un prox
 
 ### Comandos útiles
 
-| Comando | Qué hace |
-|---|---|
-| `npm run dev` | Backend + frontend en paralelo (desarrollo) |
-| `npm run build` | Compila ambos paquetes para producción |
+| Comando             | Qué hace                                                        |
+| ------------------- | --------------------------------------------------------------- |
+| `npm run dev`       | Backend + frontend en paralelo (desarrollo)                     |
+| `npm run build`     | Compila ambos paquetes para producción                          |
 | `npm run db:studio` | Abre Prisma Studio para ver/editar la base de datos visualmente |
 
 ## 📦 Llevarlo en un USB y ejecutarlo en Windows, macOS o Linux
@@ -123,3 +125,7 @@ La app arranca completamente vacía, como pediste. Orden recomendado:
 - La paleta de colores y los iconos de cuentas/categorías son personalizables al crearlas o editarlas.
 - Este proyecto se generó y verificó por lectura de código en un entorno en la nube sin acceso al registro de npm, por lo que `npm install` no se pudo ejecutar aquí. Si al instalar ves algún error, pégamelo y lo resolvemos.
 - `start.bat` (Windows) se escribió y revisó a mano igual que el resto del proyecto, pero no se pudo probar en un Windows real desde aquí — si al ejecutarlo ves algún error, copia el mensaje y lo arreglamos.
+
+## Copyright
+
+Copyright © 2026 Cheng Marquet. All rights reserved.
