@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileSpreadsheet,
   KeyRound,
+  Link2,
   RefreshCw,
   Upload,
   XCircle,
@@ -21,6 +22,7 @@ import {
   useDisconnectGoogle,
   useGoogleStatus,
   useImportGoogle,
+  useLinkSpreadsheet,
   useSyncGoogle,
 } from "../hooks/queries";
 import { getGoogleCredentials, googleAvailable, saveGoogleCredentials } from "../api/client";
@@ -232,6 +234,9 @@ function GoogleCard() {
   const syncMutation = useSyncGoogle();
   const importMutation = useImportGoogle();
   const disconnectMutation = useDisconnectGoogle();
+  const linkMutation = useLinkSpreadsheet();
+  const [sheetLink, setSheetLink] = useState("");
+  const [showLink, setShowLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [importInfo, setImportInfo] = useState<{ summary: string; warnings: string[] } | null>(null);
@@ -247,7 +252,7 @@ function GoogleCard() {
     reset();
     try {
       await connectMutation.mutateAsync();
-      setSuccess("Cuenta de Google conectada correctamente. Pulsa \"Sincronizar ahora\" para crear la hoja.");
+      setSuccess("Cuenta de Google conectada. Ahora elige si crear una hoja nueva o usar una que ya tengas.");
     } catch (err: any) {
       setError(err.message || "No se pudo completar la conexión con Google");
       if (/Client ID|Client Secret|credenciales/i.test(err.message || "")) setShowCredentials(true);
@@ -274,6 +279,21 @@ function GoogleCard() {
     }
   }
 
+  async function handleLink() {
+    reset();
+    try {
+      const result = await linkMutation.mutateAsync(sheetLink);
+      setImportInfo({
+        summary: `Hoja vinculada. ${summarizeImport(result)} Los datos de este dispositivo también se han subido.`,
+        warnings: result.warnings,
+      });
+      setSheetLink("");
+      setShowLink(false);
+    } catch (err: any) {
+      setError(err.message || "No se pudo vincular la hoja de cálculo");
+    }
+  }
+
   async function handleDisconnect() {
     if (!confirm("¿Desconectar tu cuenta de Google? Podrás volver a conectarla cuando quieras.")) return;
     reset();
@@ -295,9 +315,9 @@ function GoogleCard() {
 
           {!googleAvailable ? (
             <Alert tone="info">
-              La sincronización con Google Sheets está disponible en la versión de escritorio (Linux y Windows). En{" "}
-              {platform === "android" ? "el móvil" : "esta versión"} usa <strong>Exportar copia</strong> /{" "}
-              <strong>Restaurar copia</strong> para mover tus datos entre dispositivos.
+              La sincronización con Google Sheets está disponible en las apps de escritorio (Linux y Windows) y
+              Android. En esta versión usa <strong>Exportar copia</strong> / <strong>Restaurar copia</strong> para
+              mover tus datos entre dispositivos.
             </Alert>
           ) : (
             <>
@@ -337,38 +357,88 @@ function GoogleCard() {
                       )}
                     </p>
 
+                    {!status.spreadsheetUrl && (
+                      <p className="text-sm text-ink">
+                        ¿Qué hoja quieres usar? Si ya sincronizas desde otro dispositivo, elige{" "}
+                        <strong>Usar una hoja existente</strong> y pega su enlace para compartir los mismos datos.
+                      </p>
+                    )}
+
                     <div className="flex flex-wrap gap-2">
                       <Button onClick={handleSync} disabled={syncMutation.isPending}>
                         <RefreshCw size={15} className={syncMutation.isPending ? "animate-spin" : ""} />
-                        {syncMutation.isPending ? "Sincronizando..." : "Sincronizar ahora"}
+                        {syncMutation.isPending
+                          ? "Sincronizando..."
+                          : status.spreadsheetUrl
+                            ? "Sincronizar ahora"
+                            : "Crear hoja nueva"}
                       </Button>
-                      <Button variant="secondary" onClick={handleImport} disabled={importMutation.isPending}>
-                        <Download size={15} className={importMutation.isPending ? "animate-spin" : ""} />
-                        {importMutation.isPending ? "Importando..." : "Importar cambios"}
-                      </Button>
+                      {status.spreadsheetUrl && (
+                        <Button variant="secondary" onClick={handleImport} disabled={importMutation.isPending}>
+                          <Download size={15} className={importMutation.isPending ? "animate-spin" : ""} />
+                          {importMutation.isPending ? "Importando..." : "Importar cambios"}
+                        </Button>
+                      )}
                       {status.spreadsheetUrl && (
                         <Button variant="secondary" onClick={() => openExternal(status.spreadsheetUrl!)}>
                           <ExternalLink size={15} />
                           Abrir hoja de cálculo
                         </Button>
                       )}
+                      <Button variant={status.spreadsheetUrl ? "ghost" : "secondary"} onClick={() => setShowLink((v) => !v)}>
+                        <Link2 size={15} />
+                        {status.spreadsheetUrl ? "Usar otra hoja" : "Usar una hoja existente"}
+                      </Button>
                       <Button variant="ghost" onClick={handleDisconnect} disabled={disconnectMutation.isPending}>
                         Desconectar
                       </Button>
                     </div>
+
+                    {showLink && (
+                      <div className="rounded-xl border border-border p-4 bg-cream-soft/50">
+                        <FormField label="Enlace de la hoja de cálculo">
+                          <input
+                            className={inputClasses}
+                            value={sheetLink}
+                            onChange={(e) => setSheetLink(e.target.value)}
+                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                            spellCheck={false}
+                          />
+                        </FormField>
+                        <p className="text-xs text-ink-soft mb-3">
+                          Primero se importa lo que hay en la hoja y se combina con los datos de este dispositivo;
+                          después se sube el resultado. No se borra nada.
+                        </p>
+                        <Button size="sm" onClick={handleLink} disabled={linkMutation.isPending || !sheetLink.trim()}>
+                          {linkMutation.isPending ? "Vinculando..." : "Vincular hoja"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="flex flex-wrap gap-2">
                       <Button onClick={handleConnect} disabled={connectMutation.isPending}>
-                        {connectMutation.isPending ? "Esperando a Google (mira tu navegador)..." : "Conectar con Google"}
+                        {connectMutation.isPending
+                          ? platform === "desktop"
+                            ? "Esperando a Google (mira tu navegador)..."
+                            : "Conectando..."
+                          : "Conectar con Google"}
                       </Button>
-                      <Button variant="ghost" onClick={() => setShowCredentials((v) => !v)}>
-                        <KeyRound size={15} />
-                        Credenciales
-                      </Button>
+                      {platform === "desktop" && (
+                        <Button variant="ghost" onClick={() => setShowCredentials((v) => !v)}>
+                          <KeyRound size={15} />
+                          Credenciales
+                        </Button>
+                      )}
                     </div>
-                    {showCredentials && <GoogleCredentialsForm />}
+                    {showCredentials && platform === "desktop" && <GoogleCredentialsForm />}
+                    {platform === "android" && (
+                      <p className="text-xs text-ink-soft">
+                        Usa una cuenta de Google del móvil. Para compartir la hoja que ya usas en el ordenador,
+                        conéctate con la misma cuenta y después elige "Usar una hoja existente".
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -407,6 +477,12 @@ export function Settings() {
               Si borraste alguna fila en la hoja y quieres que también desaparezca de la app, usa{" "}
               <strong>"Importar cambios"</strong>. Solo se borran registros que ya estaban en la hoja (nunca algo que
               aún no se había subido), y las cuentas con movimientos se archivan en vez de borrarse.
+            </p>
+            <p>
+              <strong>Varios dispositivos</strong> (p. ej. ordenador y móvil): crea la hoja en uno y, en el otro, pulsa{" "}
+              <strong>"Usar una hoja existente"</strong> y pega su enlace. Los cambios de cada dispositivo llegan al
+              otro en menos de un minuto mientras ambas apps están abiertas. Evita editar lo mismo en los dos a la vez:
+              gana el último que sube. Los borrados solo se aplican en el otro dispositivo al pulsar "Importar cambios".
             </p>
             <p className="text-xs">
               No borres ni edites la columna <strong>ID</strong> de la hoja: es lo que usa la app para reconocer cada

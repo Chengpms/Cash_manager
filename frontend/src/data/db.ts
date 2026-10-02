@@ -56,6 +56,9 @@ export interface TransferRow {
 }
 
 export interface GoogleState {
+  // "oauth": escritorio, con refresh token. "android": token de acceso que se
+  // renueva pidiéndoselo de nuevo a Google Play Services (sin refresh token).
+  authMode: "oauth" | "android";
   email: string;
   accessToken: string;
   refreshToken: string;
@@ -270,8 +273,10 @@ export function normalizeDatabase(raw: unknown, report: NormalizeReport = { drop
   }
 
   const g = src.google as Record<string, unknown> | null | undefined;
-  if (g && typeof g === "object" && str(g.refreshToken)) {
+  const authMode = g && typeof g === "object" && g.authMode === "android" ? "android" : "oauth";
+  if (g && typeof g === "object" && (str(g.refreshToken) || authMode === "android")) {
     db.google = {
+      authMode,
       email: str(g.email, "cuenta-google"),
       accessToken: str(g.accessToken),
       refreshToken: str(g.refreshToken),

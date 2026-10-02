@@ -38,7 +38,7 @@ export const getTrend = service.getTrend;
 export const getByCategory = service.getByCategory;
 export const getBudgets = service.getBudgets;
 
-// Google Drive / Sheets (solo escritorio)
+// Google Drive / Sheets (escritorio y Android)
 export const googleAvailable = google.googleAvailable;
 export const connectGoogle = google.connectGoogle;
 export const getGoogleStatus = google.getGoogleStatus;
@@ -48,3 +48,4 @@ export const disconnectGoogle = google.disconnectGoogle;
 export const googleAutoSyncTick = google.autoSyncTick;
 export const getGoogleCredentials = google.getGoogleCredentials;
 export const saveGoogleCredentials = google.saveGoogleCredentials;
+export const linkGoogleSpreadsheet = google.linkSpreadsheet;

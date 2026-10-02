@@ -36,21 +36,50 @@ Para que el botón "Conectar con Google" de la pestaña **Ajustes** funcione, Go
    (Si ya tenías credenciales de la versión anterior con este URI, sirven tal cual.)
 6. Pulsa **Crear**. Google te mostrará un **Client ID** (termina en `.apps.googleusercontent.com`) y un **Client Secret**. Cópialos — puedes volver a verlos luego en la lista de credenciales.
 
-## 5. Introduce las credenciales en la app
-
-La sincronización con Google Sheets está disponible en la **versión de escritorio** (Linux y Windows). En Android usa *Exportar copia / Restaurar copia* para mover datos.
+## 5. Introduce las credenciales en la app (escritorio)
 
 1. Abre la app y ve a **Ajustes → Google Drive · Sheets → Credenciales**.
 2. Pega el **Client ID** y el **Client Secret** y pulsa **Guardar credenciales**. Se guardan solo en este ordenador, junto a tus datos.
 
 > Si compilas la app tú mismo, también puedes incluirlas de serie creando `frontend/.env.local` con `VITE_GOOGLE_CLIENT_ID=...` y `VITE_GOOGLE_CLIENT_SECRET=...` antes de `npm run build`. No lo hagas en instaladores que vayas a compartir con otras personas.
 
+## 5b. Registra la app de Android (solo si vas a usarla en el móvil)
+
+En Android no hace falta Client Secret ni pegar nada en la app: Google reconoce la app por su **nombre de paquete** y la **huella SHA-1** de la clave con la que está firmada. En el **mismo proyecto** de Google Cloud:
+
+1. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth**.
+2. Tipo de aplicación: **Android**.
+3. Nombre del paquete: `com.chengpms.gestordinero`
+4. Huella digital del certificado SHA-1: la de tu clave de firma. Para verla:
+   ```bash
+   keytool -list -v -keystore frontend/android/gestor-release.jks -alias gestor
+   ```
+   (te pedirá la contraseña `storePassword` de `frontend/android/keystore.properties`; copia la línea `SHA1:`).
+5. Pulsa **Crear**. No hay nada más que copiar.
+
+> Si instalas APKs firmados con otra clave (por ejemplo, los de GitHub Actions sin los *secrets* configurados, o una compilación de depuración), crea otro ID de cliente Android con la SHA-1 de esa clave. Si la SHA-1 no coincide, la app mostrará "Google no reconoce esta app".
+
+El móvil necesita los servicios de Google Play (cualquier Android con Play Store) y una cuenta de Google añadida que esté en la lista de **usuarios de prueba** del paso 3.
+
 ## 6. Conéctate
+
+En el móvil: pulsa **Conectar con Google**, elige tu cuenta y acepta los permisos; después salta al punto 4.
+
+En el ordenador:
 
 1. Pulsa **Conectar con Google**. Se abrirá tu navegador con la página de Google (la app espera la respuesta en el puerto 4000 del propio ordenador; si otro programa lo está usando, ciérralo primero).
 2. Verás un aviso de Google que dice algo como *"Google no ha verificado esta app"* — es normal porque la app está en modo Pruebas y es tuya. Pulsa **Avanzado** → **Ir a Gestor de Dinero (no seguro)** para continuar.
 3. Acepta los permisos de Google Sheets. El navegador mostrará "¡Conectado!" y la app quedará conectada.
-4. Pulsa **Sincronizar ahora**. Se creará una hoja de cálculo llamada "Gestor de Dinero" en tu Google Drive con 4 pestañas (Cuentas, Categorías, Transacciones, Transferencias). Puedes abrirla con el botón "Abrir hoja de cálculo".
+4. Elige qué hoja usar:
+   - **Crear hoja nueva**: crea "Gestor de Dinero" en tu Google Drive con 4 pestañas (Cuentas, Categorías, Transacciones, Transferencias).
+   - **Usar una hoja existente**: pega el enlace de una hoja que ya uses en otro dispositivo (ábrela en ese dispositivo con "Abrir hoja de cálculo" y copia la URL). Primero se importa su contenido y se combina con lo que tengas en este dispositivo; después se sube el resultado. No se borra nada.
+
+## Ordenador y móvil a la vez
+
+1. En el ordenador: conecta y pulsa **Crear hoja nueva** (o usa la que ya tenías).
+2. En el móvil: conecta con la **misma cuenta de Google**, pulsa **Usar una hoja existente** y pega el enlace de esa hoja.
+
+A partir de ahí, mientras las dos apps estén abiertas, los cambios de una llegan a la otra en menos de un minuto. Limitaciones: si editas el mismo registro en los dos dispositivos a la vez, gana el último que sube; y los borrados solo se aplican en el otro dispositivo cuando allí pulsas **Importar cambios**.
 
 ## Cómo se sincroniza
 

@@ -1,11 +1,14 @@
 import type { GoogleImportResult, GoogleStatus, GoogleSyncResult } from "../types";
 import { Database, GoogleState, genId, getDb, mutate, validCurrency } from "./db";
-import { desktop } from "./platform";
+import { CapacitorHttp, registerPlugin } from "@capacitor/core";
+import { desktop, platform } from "./platform";
 import { computeBalances } from "./service";
 
-// Sincronización con Google Sheets. Toda la comunicación HTTP con Google pasa
-// por el proceso principal de Electron (sin CORS ni servidor local), por eso
-// esta función solo está disponible en la versión de escritorio.
+// Sincronización con Google Sheets.
+// - Escritorio: OAuth con PKCE en el navegador del sistema; las peticiones HTTP
+//   pasan por el proceso principal de Electron (sin problemas de CORS).
+// - Android: autorización nativa con Google Play Services (plugin GoogleAuth de
+//   la app) y peticiones HTTP nativas con CapacitorHttp.
 
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
@@ -17,7 +20,39 @@ const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const SPREADSHEET_TITLE = "Gestor de Dinero";
 const SHEET_NAMES = ["Cuentas", "Categorías", "Transacciones", "Transferencias"];
 
-export const googleAvailable = !!desktop;
+export const googleAvailable = !!desktop || platform === "android";
+
+interface GoogleAuthPlugin {
+  authorize(opts: { scopes: string[]; interactive: boolean }): Promise<{ accessToken: string }>;
+}
+const AndroidGoogleAuth = registerPlugin<GoogleAuthPlugin>("GoogleAuth");
+
+// Google no indica la caducidad en Android; los tokens duran 1 h y pedimos
+// uno nuevo un poco antes.
+const ANDROID_TOKEN_LIFETIME_MS = 50 * 60 * 1000;
+
+function androidAuthError(err: any): Error {
+  const code = err?.code || "";
+  if (code === "DEVELOPER_ERROR") {
+    return new Error(
+      "Google no reconoce esta app. Falta crear en Google Cloud un ID de cliente de tipo Android con el " +
+        "nombre de paquete com.chengpms.gestordinero y la huella SHA-1 de la firma (ver GOOGLE_SETUP.md)."
+    );
+  }
+  if (code === "CANCELED") return new Error("Has cancelado el acceso a Google");
+  if (code === "NETWORK_ERROR") return new Error("Sin conexión a internet");
+  if (code === "NEEDS_CONSENT") return new Error("Hay que volver a conectar la cuenta de Google");
+  return new Error(err?.message || "No se pudo conectar con Google");
+}
+
+async function androidAuthorize(interactive: boolean): Promise<string> {
+  try {
+    const { accessToken } = await AndroidGoogleAuth.authorize({ scopes: SCOPES, interactive });
+    return accessToken;
+  } catch (err) {
+    throw androidAuthError(err);
+  }
+}
 export const GOOGLE_SCOPES = SCOPES;
 
 // ---------- HTTP ----------
@@ -30,12 +65,36 @@ interface GResponse {
 }
 
 async function gfetch(url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) {
-  if (!desktop) throw new Error("La sincronización con Google solo está disponible en la versión de escritorio");
   let res: { status: number; body: string };
   try {
-    res = await desktop.googleFetch({ url, ...init });
+    if (desktop) {
+      res = await desktop.googleFetch({ url, ...init });
+    } else if (platform === "android") {
+      const r = await CapacitorHttp.request({
+        url,
+        method: init.method || "GET",
+        headers: init.headers || {},
+        data: init.body,
+        responseType: "text",
+        connectTimeout: 30_000,
+        readTimeout: 30_000,
+      });
+      // CapacitorHttp devuelve ya parseadas las respuestas JSON
+      res = { status: r.status, body: typeof r.data === "string" ? r.data : JSON.stringify(r.data ?? "") };
+    } else {
+      throw new Error("La sincronización con Google no está disponible en esta versión");
+    }
   } catch (err: any) {
     throw new Error(`Sin conexión con Google: ${err?.message || err}`);
+  }
+  if (res.status === 401 && url !== TOKEN_URL) {
+    // Token rechazado (revocado o caducado antes de tiempo): se renovará en el siguiente intento
+    mutate(
+      (db) => {
+        if (db.google) db.google.expiryDate = 0;
+      },
+      { touchesData: false }
+    ).catch(() => undefined);
   }
   const out: GResponse = {
     ok: res.status >= 200 && res.status < 300,
@@ -91,12 +150,17 @@ export async function saveGoogleCredentials(clientId: string, clientSecret: stri
 
 // ---------- OAuth ----------
 
-export async function connectGoogle(): Promise<void> {
-  if (!desktop) throw new Error("La sincronización con Google solo está disponible en la versión de escritorio");
+interface ObtainedTokens {
+  authMode: GoogleState["authMode"];
+  accessToken: string;
+  refreshToken: string;
+  expiryDate: number | null;
+}
+
+async function desktopSignIn(): Promise<ObtainedTokens> {
   const db = await getDb();
   const { clientId, clientSecret } = getCredentials(db);
-
-  const { code, redirectUri, codeVerifier } = await desktop.googleSignIn({ clientId });
+  const { code, redirectUri, codeVerifier } = await desktop!.googleSignIn({ clientId });
 
   const res = await gfetch(TOKEN_URL, {
     method: "POST",
@@ -114,8 +178,32 @@ export async function connectGoogle(): Promise<void> {
   const tokens = res.json<{ access_token?: string; refresh_token?: string; expires_in?: number }>();
   if (!tokens.access_token) throw new Error("Google no devolvió un token de acceso");
 
+  // Google solo envía refresh_token la primera vez que se concede consentimiento
+  const refreshToken = tokens.refresh_token || db.google?.refreshToken || "";
+  if (!refreshToken) {
+    throw new Error(
+      "Google no envió un refresh token. Revoca el acceso en https://myaccount.google.com/permissions y vuelve a conectar."
+    );
+  }
+  return {
+    authMode: "oauth",
+    accessToken: tokens.access_token,
+    refreshToken,
+    expiryDate: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+  };
+}
+
+async function androidSignIn(): Promise<ObtainedTokens> {
+  const accessToken = await androidAuthorize(true);
+  return { authMode: "android", accessToken, refreshToken: "", expiryDate: Date.now() + ANDROID_TOKEN_LIFETIME_MS };
+}
+
+export async function connectGoogle(): Promise<void> {
+  if (!googleAvailable) throw new Error("La sincronización con Google no está disponible en esta versión");
+  const tokens = desktop ? await desktopSignIn() : await androidSignIn();
+
   const info = await gfetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: { Authorization: `Bearer ${tokens.access_token}` },
+    headers: { Authorization: `Bearer ${tokens.accessToken}` },
   });
   if (!info.ok) throw googleError("No se pudo obtener el email de la cuenta de Google", info);
   const email = info.json<{ email?: string }>().email || "cuenta-google";
@@ -123,24 +211,16 @@ export async function connectGoogle(): Promise<void> {
   await mutate(
     (draft) => {
       const existing = draft.google;
-      // Google solo envía refresh_token la primera vez que se concede consentimiento
-      const refreshToken = tokens.refresh_token || existing?.refreshToken || "";
-      if (!refreshToken) {
-        throw new Error(
-          "Google no envió un refresh token. Revoca el acceso en https://myaccount.google.com/permissions y vuelve a conectar."
-        );
-      }
+      // Si se reconecta la misma cuenta, se sigue usando la misma hoja
+      const same = existing?.email === email;
       draft.google = {
+        ...tokens,
         email,
-        accessToken: tokens.access_token!,
-        refreshToken,
-        expiryDate: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-        // Si se reconecta la misma cuenta, se sigue usando la misma hoja
-        spreadsheetId: existing?.email === email ? existing.spreadsheetId : null,
-        spreadsheetUrl: existing?.email === email ? existing.spreadsheetUrl : null,
-        lastSyncedAt: existing?.email === email ? existing.lastSyncedAt : null,
+        spreadsheetId: same ? existing!.spreadsheetId : null,
+        spreadsheetUrl: same ? existing!.spreadsheetUrl : null,
+        lastSyncedAt: same ? existing!.lastSyncedAt : null,
         pendingPush: true,
-        knownIds: existing?.email === email ? existing.knownIds : [],
+        knownIds: same ? existing!.knownIds : [],
       };
     },
     { touchesData: false }
@@ -154,6 +234,21 @@ async function getValidAccessToken(): Promise<{ accessToken: string; account: Go
 
   if (account.expiryDate && Date.now() < account.expiryDate - 60_000) {
     return { accessToken: account.accessToken, account };
+  }
+
+  if (account.authMode === "android") {
+    // El permiso ya está concedido: Google Play Services da un token nuevo sin mostrar nada
+    const accessToken = await androidAuthorize(false);
+    const updated = await mutate(
+      (draft) => {
+        if (!draft.google) throw new Error("No hay ninguna cuenta de Google conectada");
+        draft.google.accessToken = accessToken;
+        draft.google.expiryDate = Date.now() + ANDROID_TOKEN_LIFETIME_MS;
+        return draft.google;
+      },
+      { touchesData: false }
+    );
+    return { accessToken, account: updated };
   }
 
   const { clientId, clientSecret } = getCredentials(db);
@@ -314,7 +409,9 @@ async function spreadsheetExists(accessToken: string, spreadsheetId: string) {
 async function writeSheet(accessToken: string, spreadsheetId: string, sheetName: string, rows: (string | number)[][]) {
   const clear = await gfetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:clear`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
+    // Cuerpo vacío explícito: algunos clientes HTTP no envían Content-Length sin él
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: "{}",
   });
   if (!clear.ok) throw googleError(`No se pudo vaciar la pestaña "${sheetName}"`, clear);
   const range = `${sheetName}!A1`;
@@ -582,6 +679,19 @@ export function syncToSheets(): Promise<GoogleSyncResult> {
 type Counts = { accounts: number; categories: number; transactions: number; transfers: number };
 const zero = (): Counts => ({ accounts: 0, categories: 0, transactions: 0, transfers: 0 });
 
+// ID para una fila de la hoja que no existe en este dispositivo: se conserva el
+// de la hoja (así otro dispositivo sincronizado con la misma hoja reconoce la
+// fila como la misma) salvo que esté vacío, sea raro o ya esté en uso.
+function idForNewRow(db: Database, rowId: string | undefined): string {
+  const id = (rowId || "").trim();
+  const taken =
+    db.accounts.some((x) => x.id === id) ||
+    db.categories.some((x) => x.id === id) ||
+    db.transactions.some((x) => x.id === id) ||
+    db.transfers.some((x) => x.id === id);
+  return /^[A-Za-z0-9_-]{8,64}$/.test(id) && !taken ? id : genId();
+}
+
 function applyImport(db: Database, sheets: string[][][], allowDeletes: boolean) {
   const [accountRows, categoryRows, transactionRows, transferRows] = sheets;
   const warnings: string[] = [];
@@ -622,7 +732,7 @@ function applyImport(db: Database, sheets: string[][][], allowDeletes: boolean) 
         updated.accounts++;
       }
     } else {
-      finalId = genId();
+      finalId = idForNewRow(db, id);
       const row = { id: finalId, color: "#E8703A", icon: "wallet", createdAt: now, updatedAt: now, ...data };
       db.accounts.push(row);
       accountsById.set(finalId, row);
@@ -678,7 +788,7 @@ function applyImport(db: Database, sheets: string[][][], allowDeletes: boolean) 
         updated.categories++;
       }
     } else {
-      finalId = genId();
+      finalId = idForNewRow(db, id);
       const row = { id: finalId, createdAt: now, ...data };
       db.categories.push(row);
       categoriesById.set(finalId, row);
@@ -739,7 +849,7 @@ function applyImport(db: Database, sheets: string[][][], allowDeletes: boolean) 
         updated.transactions++;
       }
     } else {
-      const newId = genId();
+      const newId = idForNewRow(db, rowId);
       db.transactions.push({ id: newId, date, createdAt: now, ...data });
       seenTransactions.add(newId);
       created.transactions++;
@@ -791,7 +901,7 @@ function applyImport(db: Database, sheets: string[][][], allowDeletes: boolean) 
         updated.transfers++;
       }
     } else {
-      const newId = genId();
+      const newId = idForNewRow(db, rowId);
       db.transfers.push({ id: newId, date, createdAt: now, ...data });
       seenTransfers.add(newId);
       created.transfers++;
@@ -872,10 +982,62 @@ export async function importFromSheets(allowDeletes: boolean): Promise<GoogleImp
 export async function autoSyncTick(): Promise<"pushed" | "imported" | "skipped"> {
   const db = await getDb();
   if (!db.google) return "skipped";
-  if (db.google.pendingPush || !db.google.spreadsheetId) {
+  // Sin hoja elegida todavía no se hace nada: el usuario decide en Ajustes si
+  // crear una nueva o usar una existente (p. ej. la que ya usa en el ordenador).
+  if (!db.google.spreadsheetId) return "skipped";
+  if (db.google.pendingPush) {
     await syncToSheets();
     return "pushed";
   }
   await importFromSheets(false);
   return "imported";
+}
+
+// ---------- Usar una hoja ya existente ----------
+
+export function parseSpreadsheetId(input: string): string | null {
+  const trimmed = input.trim();
+  const fromUrl = trimmed.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/);
+  if (fromUrl) return fromUrl[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(trimmed) ? trimmed : null;
+}
+
+// Vincula este dispositivo a una hoja que ya existe (por ejemplo, la creada
+// desde el ordenador). Primero se IMPORTA lo que hay en la hoja y se combina
+// con los datos locales; después se sube el resultado. Nunca se sobrescribe la
+// hoja con los datos de este dispositivo sin haberla leído antes.
+export async function linkSpreadsheet(input: string): Promise<GoogleImportResult> {
+  const spreadsheetId = parseSpreadsheetId(input);
+  if (!spreadsheetId) throw new Error("Pega el enlace completo de la hoja de cálculo (o su ID)");
+
+  await exclusive(async () => {
+    const { accessToken } = await getValidAccessToken();
+    const res = await gfetch(`${SHEETS_API}/${spreadsheetId}?fields=spreadsheetId,spreadsheetUrl,sheets.properties.title`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (res.status === 404) throw new Error("No se encontró esa hoja de cálculo");
+    if (res.status === 403) throw new Error("Tu cuenta de Google no tiene acceso a esa hoja de cálculo");
+    if (!res.ok) throw googleError("No se pudo abrir la hoja de cálculo", res);
+    const info = res.json<{ spreadsheetUrl: string; sheets?: { properties: { title: string } }[] }>();
+    const titles = new Set((info.sheets || []).map((x) => x.properties.title));
+    if (!titles.has("Cuentas") || !titles.has("Transacciones")) {
+      throw new Error('Esa hoja no parece de Gestor de Dinero (le faltan las pestañas "Cuentas" y "Transacciones")');
+    }
+    await mutate(
+      (db) => {
+        if (!db.google) throw new Error("No hay ninguna cuenta de Google conectada");
+        db.google.spreadsheetId = spreadsheetId;
+        db.google.spreadsheetUrl = info.spreadsheetUrl;
+        db.google.knownIds = [];
+        // Los datos locales se suben después de importar, no antes
+        db.google.pendingPush = false;
+      },
+      { touchesData: false }
+    );
+  });
+
+  const result = await importFromSheets(false);
+  // Sube lo que solo existía en este dispositivo para que también esté en la hoja
+  await syncToSheets();
+  return result;
 }

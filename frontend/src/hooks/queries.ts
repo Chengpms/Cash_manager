@@ -136,6 +136,12 @@ export function useImportGoogle() {
   });
 }
 
+// Vincula una hoja ya existente (p. ej. la que usa el ordenador) importándola primero
+export function useLinkSpreadsheet() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (input: string) => api.linkGoogleSpreadsheet(input), onSuccess: () => qc.invalidateQueries() });
+}
+
 export function useDisconnectGoogle() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: api.disconnectGoogle, onSuccess: () => qc.invalidateQueries() });

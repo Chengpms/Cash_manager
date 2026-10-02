@@ -22,7 +22,7 @@ Los instaladores se generan automáticamente con GitHub Actions: cada push a `ma
 - **Transferencias** entre tus cuentas (crear, **editar** y borrar) que no cuentan como ingreso/gasto.
 - **Resumen**: balance total, ingresos/gastos del mes **comparados con el mes anterior**, tendencia de 6 meses y gasto por categoría.
 - **Copias de seguridad**: exporta/restaura todos tus datos en un archivo JSON. Sirve también para pasar los datos del ordenador al móvil y al revés.
-- **Google Sheets** (versión de escritorio): sincronización en los dos sentidos con una hoja de cálculo de tu Drive. Ver [`GOOGLE_SETUP.md`](./GOOGLE_SETUP.md).
+- **Google Sheets** (escritorio y Android): sincronización en los dos sentidos con una hoja de cálculo de tu Drive, que también permite usar los mismos datos en el ordenador y en el móvil. Ver [`GOOGLE_SETUP.md`](./GOOGLE_SETUP.md).
 
 ## Dónde se guardan los datos
 
@@ -53,7 +53,7 @@ gestor/
 │   │   ├── db.ts          Esquema, validación, guardado transaccional
 │   │   ├── storage.ts     Persistencia: archivo (escritorio) o IndexedDB (Android/web)
 │   │   ├── service.ts     Cuentas, categorías, movimientos, transferencias, estadísticas
-│   │   ├── google.ts      Sincronización con Google Sheets
+│   │   ├── google.ts      Sincronización con Google Sheets (OAuth en escritorio, Play Services en Android)
 │   │   └── backup.ts      Copias JSON y exportación CSV
 │   └── android/           Proyecto Android (Capacitor)
 ├── desktop/               Envoltorio de escritorio (Electron + electron-builder)
@@ -99,7 +99,7 @@ Para que GitHub Actions firme con esa misma clave, añade estos *secrets* en el 
 | `ANDROID_KEY_ALIAS` | `gestor` |
 | `ANDROID_KEY_PASSWORD` | `keyPassword` de `keystore.properties` |
 
-Sin ellos, el APK de GitHub se firma con una clave temporal (se instala bien, pero no puede actualizar uno firmado con otra clave).
+Sin ellos, el APK de GitHub se firma con una clave temporal (se instala bien, pero no puede actualizar uno firmado con otra clave, y Google Sheets no lo reconocerá salvo que registres también su SHA-1).
 
 ### Iconos
 
